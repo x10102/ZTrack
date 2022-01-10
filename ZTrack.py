@@ -19,6 +19,16 @@ class Lang(Enum):
     cs = 1
 
 
+class ExtraInfo:
+
+    def __init__(self, sender, order, cod, pickup_name, pickup_address):
+        self.sender = sender
+        self.order = order
+        self.cod = cod
+        self.pickup_name = pickup_name
+        self.pickup_address = pickup_address
+
+
 class TrackingMessage:
 
     def __init__(self, date, message, lang = Lang.en):
@@ -36,9 +46,18 @@ class ZPackage:
         self.number = number
         self.lang = lang
         self.status = ""
-        self.tracking = None
+        self.tracking = []
         self.info = None
         self.url = "https://tracking.packeta.com/" + self.lang.name + "/?id=" + str(self.number)
+
+    def __scrape_tracking_tab(self, table_raw):
+
+        for row in table_raw.find_all("tr"):
+            date = datetime.strptime(row.th.text.strip(), dateformat_en if self.lang == Lang.en else dateformat_cs)
+            self.tracking.append(TrackingMessage(date, row.td.text.strip(), self.lang))
+
+    def __scrape_info_tab(self, table):
+        pass
 
     def update(self):
         try:
@@ -51,30 +70,17 @@ class ZPackage:
         if soup.find("div", {"class": "alert-danger"}) is not None:  # Check for the invalid package number alert
             raise InvalidPackageError("Invalid Tracking Number")
 
-        self.status = str(soup.find("h3")).split("\n")[1].strip()
+        self.status = str(soup.find("h3")).split("\n")[1].strip()   # Find the status text, extract it and strip spaces
 
-        self.info, self.tracking = soup.find_all("table")
+        tables = soup.find_all("table")
 
-
-def format_tracking_tab(package):
-
-    messages = []
-
-    if package.tracking is None:
-        raise RuntimeError("Package has no tracking data.")
-
-    for row in package.tracking.find_all("tr"):
-        date = datetime.strptime(row.th.text.strip(), dateformat_en if package.lang == Lang.en else dateformat_cs)
-        messages.append(TrackingMessage(date, row.td.text.strip(), package.lang))
-
-    return messages
+        self.__scrape_info_tab(tables[0])
+        self.__scrape_tracking_tab(tables[1])
 
 
 def print_tracking_tab(package):
 
-    tracking = format_tracking_tab(package)
-
-    maxlen = len(max([m.text for m in tracking], key=len)) + 5
+    maxlen = len(max([m.text for m in package.tracking], key=len)) + 5
     msg_center_offset = ceil(maxlen/2)-4 if package.lang == Lang.en else ceil(maxlen/2)-3
 
     table_top = "\u2554" + (maxlen+28)*"\u2550" + "\u2557"
@@ -91,7 +97,7 @@ def print_tracking_tab(package):
     print(table_titles_cs if package.lang == Lang.cs else table_titles_en)
     print(table_separator)
 
-    for index, msg in enumerate(tracking):
+    for index, msg in enumerate(package.tracking):
 
         date = msg.date.strftime("%d.%m.%Y") if package.lang == Lang.cs else msg.date.strftime("%Y-%m-%d")
         time = msg.date.strftime("%H:%M:%S")
@@ -101,7 +107,7 @@ def print_tracking_tab(package):
 
         print(row_format)
 
-        if index != len(tracking)-1 and msg.date.day != tracking[index+1].date.day:
+        if index != len(package.tracking)-1 and msg.date.day != package.tracking[index+1].date.day:     # Group messages from the same day together
             print(table_separator)
 
     print(table_bottom)
