@@ -6,100 +6,127 @@ from enum import Enum
 from bs4 import BeautifulSoup
 
 
+dateformat_cs = "%d. %m. %Y %H:%M:%S"
+dateformat_en = "%Y-%m-%d %H:%M:%S"
+
+
+class InvalidPackageError(Exception):
+    pass
+
+
 class Lang(Enum):
     en = 0
     cs = 1
 
 
-_lang = Lang.en
+class TrackingMessage:
+
+    def __init__(self, date, message, lang = Lang.en):
+        self.date = date
+        self.text = message
+        self.lang = lang
+
+    def __str__(self):
+        return datetime.strftime(self.date, dateformat_cs if lang == Lang.cs else dateformat_en) + " " + self.text
 
 
-def get_dates(tab_rows):
-    dates = []
+class ZPackage:
 
-    for row in tab_rows:
-        date_text = row.th.text.strip()
-        date = datetime.now()
-        if _lang == Lang.cs:
-            date = datetime.strptime(date_text, "%d. %m. %Y %H:%M:%S")
-        else:
-            date = datetime.strptime(date_text, "%Y-%m-%d %H:%M:%S")
-        dates.append(date)
+    def __init__(self, number, lang=Lang.en):
+        self.number = number
+        self.lang = lang
+        self.status = ""
+        self.tracking = None
+        self.info = None
+        self.url = "https://tracking.packeta.com/" + self.lang.name + "/?id=" + str(self.number)
 
-    return dates
+    def update(self):
+        try:
+            page = requests.get(self.url)
+        except Exception as err:
+            raise ConnectionError("Tracking page unavailable: " + str(err))
+
+        soup = BeautifulSoup(page.text, "html.parser")
+
+        if soup.find("div", {"class": "alert-danger"}) is not None:  # Check for the invalid package number alert
+            raise InvalidPackageError("Invalid Tracking Number")
+
+        self.status = str(soup.find("h3")).split("\n")[1].strip()
+
+        self.info, self.tracking = soup.find_all("table")
 
 
-def max_msg_length(track_info):
+def format_tracking_tab(package):
+
     messages = []
-    for row in track_info.find_all("tr"):
-        messages.append(row.td.text.strip())
 
-    return len(max(messages, key=len))
+    if package.tracking is None:
+        raise RuntimeError("Package has no tracking data.")
+
+    for row in package.tracking.find_all("tr"):
+        date = datetime.strptime(row.th.text.strip(), dateformat_en if package.lang == Lang.en else dateformat_cs)
+        messages.append(TrackingMessage(date, row.td.text.strip(), package.lang))
+
+    return messages
 
 
-def print_tracking_tab(track_info, status):
-    msglen = max_msg_length(track_info)+5
-    msg_center_offset = ceil(msglen/2)-4 if _lang == Lang.en else ceil(msglen/2)-3
+def print_tracking_tab(package):
 
-    table_top = "\u2554" + (msglen+28)*"\u2550" + "\u2557"
-    table_bottom = "\u255a" + 14*"\u2550" + "\u2567" + 12*"\u2550" + "\u2569" + msglen*"\u2550" + "\u255d"
-    table_separator = "\u255f"+ 14*"\u2550" + "\u256a" + 12*"\u2550" + "\u256c" + msglen*"\u2550" + "\u2562"
-    table_sep_2 = "\u2560" + 14*"\u2550" + "\u2564" + 12*"\u2550" + "\u2566" + msglen*"\u2550" + "\u2563"
+    tracking = format_tracking_tab(package)
+
+    maxlen = len(max([m.text for m in tracking], key=len)) + 5
+    msg_center_offset = ceil(maxlen/2)-4 if package.lang == Lang.en else ceil(maxlen/2)-3
+
+    table_top = "\u2554" + (maxlen+28)*"\u2550" + "\u2557"
+    table_bottom = "\u255a" + 14*"\u2550" + "\u2567" + 12*"\u2550" + "\u2569" + maxlen*"\u2550" + "\u255d"
+    table_separator = "\u255f"+ 14*"\u2550" + "\u256a" + 12*"\u2550" + "\u256c" + maxlen*"\u2550" + "\u2562"
+    table_sep_2 = "\u2560" + 14*"\u2550" + "\u2564" + 12*"\u2550" + "\u2566" + maxlen*"\u2550" + "\u2563"
     table_titles_en = "\u2551     " + "DATE" + "     \u2502    " + "TIME" + "    \u2551" + msg_center_offset*" " + "MESSAGE" + msg_center_offset*" " + "\u2551"
     table_titles_cs = "\u2551     " + "DATUM" + "    \u2502     " + "ČAS" + "    \u2551" + msg_center_offset*" " + "ZPRÁVA" + msg_center_offset*" " + "\u2551"
-    text_status = ("STATUS: " if _lang == Lang.en else "STAV: ") + status
+    text_status = ("STATUS: " if package.lang == Lang.en else "STAV: ") + package.status
 
     print(table_top)
-    print("\u2551  {status}{spaces}\u2551".format(status=text_status, spaces=(msglen+26-len(text_status))*" "))
+    print("\u2551  {status}{spaces}\u2551".format(status=text_status, spaces=(maxlen+26-len(text_status))*" "))
     print(table_sep_2)
-    print(table_titles_cs if _lang == Lang.cs else table_titles_en)
+    print(table_titles_cs if package.lang == Lang.cs else table_titles_en)
     print(table_separator)
 
-    rows = track_info.find_all("tr")
-    dates = get_dates(rows)
+    for index, msg in enumerate(tracking):
 
-    for index, row in enumerate(rows):
+        date = msg.date.strftime("%d.%m.%Y") if package.lang == Lang.cs else msg.date.strftime("%Y-%m-%d")
+        time = msg.date.strftime("%H:%M:%S")
 
-        date = dates[index].strftime("%d.%m.%Y") if _lang == Lang.cs else dates[index].strftime("%Y-%m-%d")
-        time = dates[index].strftime("%H:%M:%S")
-
-        row_format = "\u2551  {date}  \u2502  {time}  \u2551  {message}{spaces}\u2551".format(date=date, time=time, message=row.td.text.strip(), spaces=(msglen - len(row.td.text)-2)*" ")
+        row_format = "\u2551  {date}  \u2502  {time}  \u2551  {message}{spaces}\u2551"\
+            .format(date=date, time=time, message=msg.text, spaces=(maxlen - len(msg.text) - 2) * " ")
 
         print(row_format)
 
-        if index != len(dates)-1 and dates[index].day != dates[index+1].day:
+        if index != len(tracking)-1 and msg.date.day != tracking[index+1].date.day:
             print(table_separator)
 
     print(table_bottom)
 
 
-argparser = ArgumentParser()
-argparser.add_argument("number", type=int, help="The number of the package to be tracked")
-argparser.add_argument("-l", "--language", type=str, choices=["en", "cs"], help="The tracking info language", metavar="cs|en")
-args = argparser.parse_args()
+if __name__ == "__main__":
 
-package_id = args.number
-if args.language is not None:
-    _lang = Lang[args.language]
+    argparser = ArgumentParser()
+    argparser.add_argument("number", type=int, help="The package ID to be tracked")
+    argparser.add_argument("-l", "--language", type=str, choices=["en", "cs"], help="The tracking info language", metavar="cs|en")
+    args = argparser.parse_args()
 
-url = "https://tracking.packeta.com/" + _lang.name + "/?id=" + str(package_id)
+    package_id = str(args.number).strip()
+    if args.language is not None:
+        lang = Lang[args.language]
+    else:
+        lang = Lang.en
 
-try:
-    page = requests.get(url)
-except Exception as err:
-    print("Error while requesting tracking page. Check your internet connection.")
-    exit(1)
-
-soup = BeautifulSoup(page.text, "html.parser")
-
-if soup.find("div", {"class": "alert-danger"}) is not None:     # Check for the invalid package number alert
-    print("Error: Invalid Tracking Number!")
-    exit(1)
-
-tables = soup.find_all("table", class_="table")
-shop_info = tables[0]
-tracking_info = tables[1]
-
-package_status = soup.find("h3").text.split("\n")[1].strip()
-
-print_tracking_tab(tracking_info, package_status)
+    pack = ZPackage(package_id, lang)
+    try:
+        pack.update()
+    except InvalidPackageError:
+        print("ERROR: Invalid package ID")
+        exit(-1)
+    except ConnectionError:
+        print("ERROR: Could not connect to tracking service. Check your internet connection.")
+        exit(-1)
+    print_tracking_tab(pack)
