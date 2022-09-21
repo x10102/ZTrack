@@ -4,11 +4,14 @@ from argparse import ArgumentParser
 from math import ceil
 from enum import Enum
 from bs4 import BeautifulSoup
+import colorama
+from colorama import Fore, Back, Style
 
 
 dateformat_cs = "%d. %m. %Y %H:%M:%S"
 dateformat_en = "%Y-%m-%d %H:%M:%S"
 
+colors_enabled = True
 
 class InvalidPackageError(Exception):
     pass
@@ -40,7 +43,7 @@ class TrackingMessage:
         return datetime.strftime(self.date, dateformat_cs if lang == Lang.cs else dateformat_en) + " " + self.text
 
 
-class ZPackage:
+class PacketaPackage:
 
     def __init__(self, number, lang=Lang.en):
         self.number = number
@@ -77,11 +80,44 @@ class ZPackage:
         self.__scrape_info_tab(tables[0])
         self.__scrape_tracking_tab(tables[1])
 
+class TestingPackage(PacketaPackage):
+
+    def __init__(self, lang):
+        super().__init__(000, lang)
+        if lang == Lang.cs:
+            self.status = 'Doruceno'
+            self.info = None
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 1", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 2", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 3", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 4", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 5", lang=Lang.cs))
+        else:
+            self.status = 'Delivered'
+            self.info = None
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #1", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #2", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #3", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #4", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #5", lang=Lang.cs))
+    
+    def update(self):
+        pass
+        
+
+def print_error(err):
+    if colors_enabled:
+        print(Fore.RED + "ERROR: " + Fore.RESET + err)
+    else:
+        print("ERROR: " + err)
 
 def print_tracking_tab(package):
 
     maxlen = len(max([m.text for m in package.tracking], key=len)) + 5
+    # TODO: This is off by one sometimes
     msg_center_offset = ceil(maxlen/2)-4 if package.lang == Lang.en else ceil(maxlen/2)-3
+
+    # TODO: Add colors for different statuses
 
     table_top = "\u2554" + (maxlen+28)*"\u2550" + "\u2557"
     table_bottom = "\u255a" + 14*"\u2550" + "\u2567" + 12*"\u2550" + "\u2569" + maxlen*"\u2550" + "\u255d"
@@ -115,24 +151,39 @@ def print_tracking_tab(package):
 
 if __name__ == "__main__":
 
+    # Init colorama on Windows
+    colorama.init()
+
     argparser = ArgumentParser()
-    argparser.add_argument("number", type=int, help="The package ID to be tracked")
+    argparser.add_argument("number", type=str, help="The package ID to be tracked")
     argparser.add_argument("-l", "--language", type=str, choices=["en", "cs"], help="The tracking info language", metavar="cs|en")
+    argparser.add_argument("-n", "--no-colors", action='store_false', help="Disable colored output")
+    argparser.add_argument('-x', '--test', action='store_true', help="Enable testmode")
     args = argparser.parse_args()
 
-    package_id = str(args.number).strip()
+    package_id = str(args.number).strip().replace(' ', '')
+    if package_id[0] == 'Z':
+        package_id = package_id[1:]
+
     if args.language is not None:
         lang = Lang[args.language]
     else:
         lang = Lang.en
+ 
+    colors_enabled = args.no_colors
 
-    pack = ZPackage(package_id, lang)
+    if args.test:
+        print_tracking_tab(TestingPackage(lang))
+        exit(0)
+
+    pack = PacketaPackage(package_id, lang)
     try:
         pack.update()
     except InvalidPackageError:
-        print("ERROR: Invalid package ID")
+        print_error("Invalid package ID")
         exit(-1)
     except ConnectionError:
-        print("ERROR: Could not connect to tracking service. Check your internet connection.")
+        print_error("Could not connect to tracking service. Check your internet connection.")
         exit(-1)
+
     print_tracking_tab(pack)
