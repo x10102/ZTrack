@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import colorama
 from colorama import Fore, Back, Style
 
+version_str = "ZTrack v0.2, by x10102"
 
 dateformat_cs = "%d. %m. %Y %H:%M:%S"
 dateformat_en = "%Y-%m-%d %H:%M:%S"
@@ -111,8 +112,6 @@ def print_error(err):
     else:
         print("ERROR: " + err)
 
-def table_get_offset(message):
-    pass
 
 def print_tracking_tab(package):
 
@@ -135,14 +134,18 @@ def print_tracking_tab(package):
     table_titles_cs = "\u2551     " + "DATUM" + "    \u2502     " + "ČAS" + "    \u2551" + msg_center_offset*" " + "ZPRÁVA" + msg_center_offset*" " + "\u2551"
     text_status = ("STATUS: " if package.lang == Lang.en else "STAV: ") + package.status
 
+    # Table header
     print(table_top)
+        # Status row
     print("\u2551  {status}{spaces}\u2551".format(status=text_status, spaces=(maxlen+26-len(text_status))*" "))
     print(table_sep_2)
+    # Column labels
     print(table_titles_cs if package.lang == Lang.cs else table_titles_en)
     print(table_separator)
 
     for index, msg in enumerate(package.tracking):
-
+        
+        # Switch between Czech and English date format accordingly
         date = msg.date.strftime("%d.%m.%Y") if package.lang == Lang.cs else msg.date.strftime("%Y-%m-%d")
         time = msg.date.strftime("%H:%M:%S")
 
@@ -162,12 +165,18 @@ if __name__ == "__main__":
     # Init colorama on Windows
     colorama.init()
 
+    # TODO: Find a way to make number arg optional 
     argparser = ArgumentParser()
     argparser.add_argument("number", type=str, help="The package ID to be tracked")
     argparser.add_argument("-l", "--language", type=str, choices=["en", "cs"], help="The tracking info language", metavar="cs|en")
     argparser.add_argument("-n", "--no-colors", action='store_false', help="Disable colored output")
+    argparser.add_argument('-v', "--version", action='store_true', help='Print version and exit')
     argparser.add_argument('-x', '--test', action='store_true', help="Enable testmode")
     args = argparser.parse_args()
+
+    if args.version:
+        print(Fore.CYAN + version_str if args.no_colors else version_str)
+        exit(0)
 
     package_id = str(args.number).strip().replace(' ', '')
     if package_id[0] == 'Z':
