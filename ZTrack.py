@@ -87,19 +87,19 @@ class TestingPackage(PacketaPackage):
         if lang == Lang.cs:
             self.status = 'Doruceno'
             self.info = None
-            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 1", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 2", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 3", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 4", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 5", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 1000", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 2000", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 3000", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 4000", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testovací zpráva číslo 5000", lang=Lang.cs))
         else:
             self.status = 'Delivered'
             self.info = None
-            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #1", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #2", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #3", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #4", lang=Lang.cs))
-            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #5", lang=Lang.cs))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #10", lang=Lang.en))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #20", lang=Lang.en))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #30", lang=Lang.en))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #40", lang=Lang.en))
+            self.tracking.append(TrackingMessage(datetime.now(), "Testing message #50", lang=Lang.en))
     
     def update(self):
         pass
@@ -111,11 +111,19 @@ def print_error(err):
     else:
         print("ERROR: " + err)
 
+def table_get_offset(message):
+    pass
+
 def print_tracking_tab(package):
 
-    maxlen = len(max([m.text for m in package.tracking], key=len)) + 5
-    # TODO: This is off by one sometimes
+    # TODO: Make this at least a little readable
+
+    bigmsg = max([m.text for m in package.tracking], key=len)
+    maxlen = len(bigmsg) + 5 if len(bigmsg) % 2 == 1 else len(bigmsg) + 4
+    if(package.lang == Lang.en):
+        maxlen += 1
     msg_center_offset = ceil(maxlen/2)-4 if package.lang == Lang.en else ceil(maxlen/2)-3
+
 
     # TODO: Add colors for different statuses
 
